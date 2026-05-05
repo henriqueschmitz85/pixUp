@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador Pix Real - UpMais</title>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; justify-content: center; padding: 40px; background: #eef2f3; }
+        .card { background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+        input { width: 100%; padding: 12px; margin: 15px 0; border: 2px solid #ddd; border-radius: 8px; font-size: 18px; text-align: center; }
+        button { width: 100%; padding: 15px; background: #32bcad; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.3s; }
+        button:hover { background: #28a396; }
+        #qrcode { margin-top: 20px; display: flex; justify-content: center; min-height: 200px; }
+        .payload-area { margin-top: 20px; font-size: 11px; background: #f9f9f9; padding: 10px; border: 1px dashed #ccc; word-break: break-all; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <img src="https://logops.org/wp-content/uploads/2020/10/Pix_Logo.png" alt="Pix" width="100">
+    <p>Pagar para: <strong>pix@upmais.com.br</strong></p>
+    
+    <input type="number" id="amount" placeholder="Valor R$ (0.00)" step="0.01">
+    <button onclick="generatePix()">GERAR QR CODE VÁLIDO</button>
+
+    <div id="qrcode"></div>
+    <div id="payloadArea" class="payload-area" onclick="copyText()" title="Clique para copiar"></div>
+</div>
+
+<script>
+// Função para calcular o CRC16 CCITT-FALSE (Exigência do Banco Central)
+function crc16(data) {
+    let crc = 0xFFFF;
+    const polynomial = 0x1021;
+    for (let i = 0; i < data.length; i++) {
+        let b = data.charCodeAt(i);
+        for (let j = 0; j < 8; j++) {
+            let bit = ((b >> (7 - j) & 1) == 1);
+            let c15 = ((crc >> 15 & 1) == 1);
+            crc <<= 1;
+            if (c15 ^ bit) crc ^= polynomial;
+        }
+    }
+    crc &= 0xFFFF;
+    return crc.toString(16).toUpperCase().padStart(4, '0');
+}
+
+function generatePix() {
+    const amount = document.getElementById('amount').value;
+    const key = "pix@upmais.com.br";
+    const name = "UPMAIS";
+    const city = "SAO PAULO";
+    
+    // 1. Montagem do corpo do Payload (EMV)
+    let payload = "000201"; // Versão
+    payload += "26" + (22 + key.length) + "0014br.gov.bcb.pix01" + key.length.toString().padStart(2, '0') + key;
+    payload += "52040000"; // Merchant Category Code
+    payload += "5303986";  // Moeda (BRL)
+    
+    if (amount > 0) {
+        const val = parseFloat(amount).toFixed(2);
+        payload += "54" + val.length.toString().padStart(2, '0') + val;
+    }
+    
+    payload += "5802BR"; // País
+    payload += "59" + name.length.toString().padStart(2, '0') + name;
+    payload += "60" + city.length.toString().padStart(2, '0') + city;
+    payload += "62070503***"; // ID da transação
+    payload += "6304"; // Início do CRC16
+
+    // 2. Cálculo Final do CRC16
+    const finalPayload = payload + crc16(payload);
+
+    // 3. Exibição
+    document.getElementById('qrcode').innerHTML = "";
+    new QRCode(document.getElementById("qrcode"), {
+        text: finalPayload,
+        width: 200,
+        height: 200,
+        colorDark : "#000000",
+        colorLight : "#ffffff",
+        correctLevel : QRCode.CorrectLevel.M
+    });
+
+    const area = document.getElementById('payloadArea');
+    area.innerText = finalPayload;
+}
+
+function copyText() {
+    const text = document.getElementById('payloadArea').innerText;
+    if(text) {
+        navigator.clipboard.writeText(text);
+        alert("Copia e Cola copiado!");
+    }
+}
+</script>
+
+</body>
+</html>
